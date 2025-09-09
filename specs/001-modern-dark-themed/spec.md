@@ -66,14 +66,12 @@ As a curious developer visiting the VS Code Insider podcast site, I want to quic
 6. **Given** a visitor using keyboard navigation, **When** they tab through interactive elements, **Then** focus order follows visual hierarchy and all actionable elements are reachable.
 
 ### Edge Cases
-- Episode has a speaker appearing in multiple episodes: related section should prioritize diversity (no duplicate listing of current episode, avoid listing more than 2 episodes from same speaker unless <3 alternatives exist).
-- Transcript extremely long (e.g., > 15k characters): UI still renders with collapsible sections or virtual scroll [NEEDS CLARIFICATION: Should transcript support collapsible segments?].
+- Episode has a speaker appearing in multiple episodes: related section prioritizes diversity (no more than 2 episodes featuring the same primary speaker unless <3 total candidates exist).
+- Transcript extremely long (e.g., >15k characters): initial view shows first 8 segments (~first 2,500–3,000 characters) with an "Expand Full Transcript" control (progressive disclosure).
 - Missing speaker image asset: fallback avatar with initials displayed.
-- User opens direct deep link to an episode that references a speaker not in featured set: page still loads and does not assume presence on landing.
-- Network latency / partial load of transcript: display skeleton/loader state with clear indicator.
-- Mobile narrow viewport (<360px): layout degrades gracefully without overlapping text.
-
-## Requirements *(mandatory)*
+- User opens direct deep link to an episode referencing a speaker not on landing: page still loads correctly.
+- Network latency / partial transcript load: display skeleton state until segments ready (target <500ms render after data available).
+- Mobile very narrow (<360px): single-column layout; no horizontal scroll.
 
 ### Functional Requirements
 - **FR-001**: System MUST provide a public landing page presenting site title, tagline, and a featured speakers/conversations section.
@@ -81,36 +79,40 @@ As a curious developer visiting the VS Code Insider podcast site, I want to quic
 - **FR-003**: System MUST provide an Episodes listing page with at least 20 mock episodes initially available.
 - **FR-004**: System MUST show each episode summary with: episode number, title, publish date, 1–2 sentence abstract, primary speakers.
 - **FR-005**: System MUST allow navigation from any episode summary or featured card to its detailed episode page.
-- **FR-006**: System MUST render an Episode detail page containing: full title, episode number, publish date, duration (mock), speaker list (names + roles), full transcript (mock textual content), and related episodes list.
-- **FR-007**: System MUST provide related episodes based on at least one shared attribute (shared speaker OR shared topic tag) excluding the current episode.
+- **FR-006**: System MUST render an Episode detail page containing: full title, episode number, publish date, duration (mock), speaker list (names + roles), full transcript (segmented), and related episodes list.
+- **FR-007**: System MUST compute related episodes using shared speaker or shared tag criteria (minimum one match) excluding the current episode.
 - **FR-008**: System MUST ensure related episodes list size between 3 and 6 when enough qualifying episodes exist; if fewer qualify, show all available (minimum 1 if exists).
 - **FR-009**: System MUST support keyboard-only navigation across landing, episodes list, and episode detail pages.
 - **FR-010**: System MUST maintain WCAG AA contrast in dark theme for text, buttons, and interactive states.
 - **FR-011**: System MUST provide fallback visuals (placeholder avatar) when a speaker image asset is unavailable.
-- **FR-012**: System MUST load transcript content such that a loading state is visible if content retrieval exceeds 300ms (mock condition acceptable for spec).
+- **FR-012**: System MUST show a visible loading state if transcript retrieval exceeds 300ms.
 - **FR-013**: System MUST prevent duplicate listing of the current episode in related episodes.
-- **FR-014**: System MUST present consistent primary navigation accessible from all pages (e.g., Home / Episodes) without specifying implementation mechanics.
-- **FR-015**: System MUST handle long transcripts without layout break (scrollable area or sectioning) [NEEDS CLARIFICATION: transcript segmentation approach not specified].
-- **FR-016**: System MUST ensure episode ordering default is newest to oldest by publish date.
-- **FR-017**: System MUST support basic discovery via browsing and related navigation; no search requirement explicitly stated [NEEDS CLARIFICATION: Is search/filter required now or deferred?].
+- **FR-014**: System MUST present consistent primary navigation accessible from all pages (e.g., Home / Episodes).
+- **FR-015**: System MUST segment long transcripts and initially collapse after the first 8 segments with an expand control.
+- **FR-016**: System MUST default episode ordering to newest → oldest by publish date.
+- **FR-017**: System MUST provide a lightweight client-side keyword filter (title, speaker name, tag) on the Episodes listing page.
 - **FR-018**: System MUST provide at least 20 unique mock episode data objects for development & validation.
 - **FR-019**: System MUST allow direct deep linking to any episode page via stable URL structure.
-- **FR-020**: System MUST ensure accessibility roles/labels for interactive cards and navigation landmarks.
-
-*Ambiguity Markers Added Where Product Clarification Needed.*
+- **FR-020**: System MUST expose accessibility roles/labels for interactive cards and navigation landmarks.
+- **FR-021**: System MUST rank related episodes by (1) shared speaker count, (2) tag overlap count, (3) recency; enforce diversity cap of max 2 entries sharing the same primary speaker unless insufficient pool (<3 candidates).
 
 ### Key Entities *(include if feature involves data)*
-- **Episode**: Represents a podcast installment; attributes (non-implementation): number, title, subtitle/abstract, publish date, duration (mock), speakers (references), topic tags, transcript text (long-form), related episodes (derived), hero image (optional), slug/identifier.
-- **Speaker**: Represents an individual featured in one or more episodes; attributes: name, role/title, short bio (optional), avatar reference, associated episode references.
-- **Transcript**: Narrative content of an episode; attributes: episode reference, full textual content, (optional) segmented blocks with speaker attribution [NEEDS CLARIFICATION: Is per-speaker segmentation required?].
-- **Related Episode Relationship (Derived)**: Not stored as primary data—computed by shared speaker or overlapping tag set above threshold [NEEDS CLARIFICATION: minimum tag overlap threshold?].
+- **Episode**: number, title, abstract, publish date, duration (mock), speakers (references), topic tags, transcript segments (references), derived related episodes, hero image (optional), slug.
+- **Speaker**: name, role/title, optional short bio, avatar reference, associated episodes list.
+- **Transcript Segment**: sequence index, episode reference, speaker name, text (≤1200 chars), approximate character length.
+- **Related Episode Relationship (Derived)**: ranking tuple (shared_speakers, tag_overlap_count, recency_rank) computed on demand.
 
-Assumptions (pending confirmation):
-1. No authentication or user accounts in scope.
-2. No audio streaming implementation required beyond placeholder reference.
-3. No search bar or filtering unless clarified.
-4. Transcripts can be plain text (no formatting requirements specified yet).
-5. Featured speakers subset curated manually (not auto-generated) [NEEDS CLARIFICATION: curation rule or manual editorial control?].
+### Confirmed Scope & Decisions
+1. Public-only experience; no auth.
+2. Audio integration deferred; placeholder only.
+3. Minimal keyword filter included; full-text transcript search deferred.
+4. Transcripts stored as segmented plain text with speaker attribution; no rich formatting.
+5. Featured speakers curated manually; fallback selects top 3–5 by episode count then recency.
+6. Related diversity rule enforced (see FR-021).
+7. Long transcript progressive disclosure (see FR-015).
+8. Tag overlap threshold: ≥1 shared tag qualifies.
+9. Baseline performance targets: Landing TTI <1s (mock data), transcript render <500ms after data ready.
+10. Accessibility baseline: All interactive elements keyboard reachable with visible focus outline; segments use semantic containers for assistive tech navigation.
 
 ---
 
@@ -118,17 +120,17 @@ Assumptions (pending confirmation):
 *GATE: Automated checks run during main() execution*
 
 ### Content Quality
-- [ ] No implementation details (languages, frameworks, APIs)
-- [ ] Focused on user value and business needs
-- [ ] Written for non-technical stakeholders
-- [ ] All mandatory sections completed
+- [x] No implementation details (languages, frameworks, APIs)
+- [x] Focused on user value and business needs
+- [x] Written for non-technical stakeholders
+- [x] All mandatory sections completed
 
 ### Requirement Completeness
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous  
-- [ ] Success criteria are measurable
-- [ ] Scope is clearly bounded
-- [ ] Dependencies and assumptions identified
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous  
+- [x] Success criteria are measurable
+- [x] Scope is clearly bounded
+- [x] Dependencies and assumptions identified
 
 ---
 
